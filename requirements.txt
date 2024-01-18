@@ -1,0 +1,6 @@
+python-xlib; sys_platform == 'linux'
+daemoniker
+wxpython
+appdirs
+psutil
+dataclasses-json
