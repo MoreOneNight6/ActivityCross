@@ -1,5 +1,5 @@
 from functools import cache
-from typing import Iterable, Tuple
+#from ty
 #import watchdog
 #import watchdog.events
 #import watchdog.observers
@@ -10,38 +10,11 @@ import os
 import datetime
 import sqlite3
 import logging
-import time
+#import time
 from enum import Enum
-
-# A generator that returns the lines of a file in reverse order"""
-#def reverse_readline(filename, buf_size=8192):
-#    with open(filename, 'rb') as fh:
-#        segment = None
-#        offset = 0
-#        fh.seek(0, os.SEEK_END)
-#        file_size = remaining_size = fh.tell()
-#        while remaining_size > 0:
-#            offset = min(file_size, offset + buf_size)
-#            fh.seek(file_size - offset)
-#            buffer = fh.read(min(remaining_size, buf_size))
-#            # remove file's last "\n" if it exists, only for the first buffer
-#            if remaining_size == file_size and buffer[-1] == ord('\n'):
-#                buffer = buffer[:-1]
-#            remaining_size -= buf_size
-#            lines = buffer.split('\n'.encode())
-#            # append last chunk's segment to this chunk's last line
-#            if segment is not None:
-#                lines[-1] += segment
-#            segment = lines[0]
-#            lines = lines[1:]
-#            # yield lines in this chunk except the segment
-#            for line in reversed(lines):
-#                # only decode on a parsed line, to avoid utf-8 decode error
-#                yield line.decode()
-#        # Don't yield None if the file was empty
-#        if segment is not None:
-#            yield segment.decode()
-
+from typing import Optional
+from closure_table import ClosureTable
+import random
 
 class Database():
     def __init__(self, DatabasePath):
@@ -53,72 +26,137 @@ class Database():
         #self.FirstEvent = None
         #self.cur = self.con.cursor()
         if not Created:
-            self.con.execute(Events.Event.Table)
-            self.con.execute(Categories.Category.Table)
+            self.con.executescript(ClosureTable._Table)
+            self.con.execute(Categories.Category._Table)
             logging.warning("Creating new database at %s", self.DatabasePath)
             #print("UWWWWW")
-        return self
+        return self.con
 
     def __exit__(self, *args):
         self.con.close()
 
-# Class to handle categories for window
-class Categories():
+################
+### CATEGORY ###
+################
+
+class EMatchingMode(Enum):
+    ALWAYS = 0
+    PREFIX = 1
+    EXACT  = 2
+    REGEX  = 3
+
+class EMatchingTarget(Enum):
+    TIMESTAMP = 0
+    CLASS = 1
+    TITLE = 2
+    CLASS_TITLE = 3
+
+class Categories(ClosureTable):
+    def __init__(self, conn):
+        print(conn)
+        super().__init__(conn)
+        self.con = conn
+
 
     # Data struct for one category
     @dataclass
     class Category():
-        Table = """
+        _Table = """
         CREATE TABLE Categories (
-            Name TEXT PRIMARY KEY,
-            Parent TEXT,
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            Name TEXT,
             MatchingMode INT,
             MatchingTarget INT,
             Pattern TEXT,
             ColorR INT,
             ColorG INT,
             ColorB INT,
+            Lowercase BOOL
+            --FOREIGN KEY (CatID) REFERENCES data_table(id)
         )
         """
-        class EMatchingMode(Enum):
-            ALWAYS = 0
-            PREFIX = 1
-            EXACT  = 2
-            REGEX  = 3
-
-        class EMatchingTarget(Enum):
-            TIMESTAMP = 0
-            CLASS = 1
-            NAME = 2
         Name: str
-        MatchingMode: int
-        MatchingTarget: int
+        MatchingMode: EMatchingMode
+        MatchingTarget: EMatchingTarget
         Pattern: str
-        Color: tuple[int,int,int]
-        Parent: str
+        _Color: tuple[int,int,int] = (100,100,100)
+        #_CatID: int = int(random.random() * 1000000)
+        _Lowercase: int = 0
+        _CatID: Optional[int] = None
 
         @staticmethod
         def FromTuple(SQLTuple):
-            return Categories.Category(*SQLTuple[0:4])
+            return Categories.Category(SQLTuple[1],
+                                       SQLTuple[2],
+                                       SQLTuple[3],
+                                       SQLTuple[4],
+                                       (SQLTuple[5], SQLTuple[6], SQLTuple[7]),
+                                       SQLTuple[8],
+                                       SQLTuple[0])
 
         def ToTuple(self):
-            return [self.Name, self.MatchingMode, self.MatchingTarget, self.Pattern, *self.Color[0:2]]
+            return [self._CatID, 
+                    self.Name, 
+                    self.MatchingMode.value, 
+                    self.MatchingTarget.value, 
+                    self.Pattern, 
+                    *self._Color,
+                    self._Lowercase]
 
+    def _InsertIntoSQL(self, Child:Category):
+        Cur = self.con.cursor()
+        FieldList = "Name, MatchingMode, MatchingTarget, Pattern, ColorR, ColorG, ColorB, Lowercase"
+        if Child._CatID == None:
+            print(Child.ToTuple()[1::], len(Child.ToTuple()[1::]))
+            Cur.execute("""INSERT INTO Categories """ + 
+                        " (" + FieldList + ") " +
+                        """VALUES (?,?,?,?,?,?,?,?)""", Child.ToTuple()[1::])
+        else:
+            print(Child.ToTuple())
+            Cur.execute("""INSERT INTO Categories """ +
+                        " (" + "id,"+FieldList + ") " +
+                        """VALUES (?,?,?,?,?,?,?,?,?)""", Child.ToTuple())
+        ID = Cur.lastrowid
+        Cur.close()
+        Child._CatID = ID
 
-    def __init__(self, Con):
-        self.Con = Con
+    def GetRootNode(self):
+        Root = self.select_children(0)
+        if Root == []:
+            print("CREATED")
+            RootNode = Categories.Category("Undefined", 
+                                           EMatchingMode.ALWAYS, 
+                                           EMatchingTarget.TIMESTAMP,
+                                           "")
+            RootNode._CatID = 0
+            self.insert_child(RootNode._CatID, RootNode._CatID)
+            self._InsertIntoSQL(RootNode)
+            self.con.commit()
+            return RootNode
+        else:
+            print("LOADED", Root)
+            return Categories.Category.FromTuple(Root[0])
 
-    #def AddCategory(self, Category: Category):
-    #    self.
-        
+    def NewCategory(self, Parent:Category, Child:Category):
+        #Con.execute("INSERT INTO CatClosures
+        self._InsertIntoSQL(Child)
+        print(Child._CatID)
+        self.insert_child(Parent._CatID, Child._CatID)
+        self.con.commit()
 
+#############
+### EVENT ###
+#############
 
-# Class to handle window change events
 class Events():
+
+    def __init__(self, con):
+        self.con = con
+
     # Data struct for one window event
     @dataclass()
     class Event():
-        Table = """
+        _Table = """
         CREATE TABLE Events (
             Timestamp REAL NOT NULL,
             Class TEXT,
@@ -133,15 +171,13 @@ class Events():
         def FromSQL(SQLTuple):
             return Events.Event(SQLTuple[0], SQLTuple[1], SQLTuple[2])
 
-    SQLToRecord = lambda x: [Events.Event(datetime.datetime.fromtimestamp(i[0]), i[1], i[2]) for i in x]
-    
-    def __init__(self, Con) -> None:
-        #self.DatabasePath = DatabasePath
-        self.con = Con
-   
+        def ToSQL(self):
+            return [self.Timestamp.timestamp(), self.Class, self.Name]
+
     @cache
     def _GetFirstEvent(self):
-        Res = self.con.execute("SELECT * FROM Events ORDER BY ROWID ASC LIMIT 1")
+        con = self.con
+        Res = con.execute("SELECT * FROM Events ORDER BY ROWID ASC LIMIT 1")
         Ret = Res.fetchone()
         logging.info("Finding DB first record")
         if Ret != None:
@@ -153,14 +189,33 @@ class Events():
         return Ret
 
     def GetRange(self, Start: datetime.datetime, Stop:datetime.datetime):
-        Res = self.con.execute("SELECT * FROM Events WHERE Timestamp < ? AND Timestamp > ? ORDER BY Timestamp", (Start.timestamp(), Stop.timestamp()))
+        con=self.con
+        Res = con.execute("SELECT * FROM Events WHERE Timestamp < ? AND Timestamp > ? ORDER BY Timestamp", (Start.timestamp(), Stop.timestamp()))
         #Res = self.con.execute("SELECT * FROM Events")
         ResL = Res.fetchall()
         #print(ResL)
         if ResL != None:
-            return [Events.Event.FromSQL(i) for i in Events.SQLToRecord(ResL)]
+            return [Events.Event.FromSQL(i) for i in ResL]
 
-    def AddRecord(self, Record:Event) -> None:
-        self.con.execute("INSERT INTO Events VALUES (?,?,?)", (Record.Timestamp.timestamp(), Record.Class, Record.Name))
-        self.con.commit()
+    def AddRecord(self,Record:Event) -> None:
+        con = self.con
+        con.execute("INSERT INTO Events VALUES (?,?,?)", (Record.Timestamp.timestamp(), Record.Class, Record.Name))
+        con.commit()
 
+
+with Database("TestDB.db") as Conn:
+    CatObj = Categories(Conn)
+    GameObj = Categories.Category("Games", 
+                                  EMatchingMode.REGEX, 
+                                  EMatchingTarget.CLASS_TITLE,
+                                  "Factorio")
+
+    LewdGameObj = Categories.Category("Lewd Games", 
+                                      EMatchingMode.REGEX, 
+                                      EMatchingTarget.CLASS_TITLE,
+                                      "Degrees Of Lewdity")
+    LewdGameObj._Color = (255,0,0)
+
+    CatObj.NewCategory(CatObj.GetRootNode(), GameObj)
+    CatObj.NewCategory(GameObj, LewdGameObj)
+    #print(Categories.GetRootNode())

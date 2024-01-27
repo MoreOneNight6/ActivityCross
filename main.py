@@ -129,7 +129,7 @@ class DaemonPanel(wx.Panel):
             #print(DaemonState)
             self.StatusText.SetLabel("Deamon inactive")
             self.StatusText.SetForegroundColour((255,0,0))
-            self.PidText.SetLabel(f"PID ??????")
+            self.PidText.SetLabel("PID ??????")
             #self.PidText.Hide()
 
         self.Sizer2.Layout()
