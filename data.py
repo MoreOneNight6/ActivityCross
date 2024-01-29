@@ -39,18 +39,22 @@ class Database():
 ### CATEGORY ###
 ################
 
+# How to match an event for Category
 class EMatchingMode(Enum):
     ALWAYS = 0
     PREFIX = 1
     EXACT  = 2
     REGEX  = 3
 
+# What to match event on for Category
 class EMatchingTarget(Enum):
     TIMESTAMP = 0
     CLASS = 1
     TITLE = 2
     CLASS_TITLE = 3
 
+# Wrapper for Category for interacting with database
+# Uses closure table to represent hiearchy
 class Categories(ClosureTable):
     def __init__(self, conn):
         print(conn)
@@ -71,7 +75,8 @@ class Categories(ClosureTable):
             ColorR INT,
             ColorG INT,
             ColorB INT,
-            Lowercase BOOL
+            Lowercase BOOL,
+            AlwaysActive BOOL
             --FOREIGN KEY (CatID) REFERENCES data_table(id)
         )
         """
@@ -80,8 +85,11 @@ class Categories(ClosureTable):
         MatchingTarget: EMatchingTarget
         Pattern: str
         _Color: tuple[int,int,int] = (100,100,100)
-        #_CatID: int = int(random.random() * 1000000)
         _Lowercase: int = 0
+        _AlwaysActive: int = 0
+
+        #_CatID: int = int(random.random() * 1000000)
+        _Depth: Optional[int] = None
         _CatID: Optional[int] = None
 
         @staticmethod
@@ -92,6 +100,8 @@ class Categories(ClosureTable):
                                        SQLTuple[4],
                                        (SQLTuple[5], SQLTuple[6], SQLTuple[7]),
                                        SQLTuple[8],
+                                       SQLTuple[9],
+                                       SQLTuple[10],
                                        SQLTuple[0])
 
         def ToTuple(self):
@@ -101,24 +111,28 @@ class Categories(ClosureTable):
                     self.MatchingTarget.value, 
                     self.Pattern, 
                     *self._Color,
-                    self._Lowercase]
+                    self._Lowercase,
+                    self._AlwaysActive]
 
     def _InsertIntoSQL(self, Child:Category):
         Cur = self.con.cursor()
-        FieldList = "Name, MatchingMode, MatchingTarget, Pattern, ColorR, ColorG, ColorB, Lowercase"
+        FieldList = "Name, MatchingMode, MatchingTarget, Pattern, ColorR, ColorG, ColorB, Lowercase, AlwaysActive"
         if Child._CatID == None:
             print(Child.ToTuple()[1::], len(Child.ToTuple()[1::]))
             Cur.execute("""INSERT INTO Categories """ + 
                         " (" + FieldList + ") " +
-                        """VALUES (?,?,?,?,?,?,?,?)""", Child.ToTuple()[1::])
+                        """VALUES (?,?,?,?,?,?,?,?,?)""", Child.ToTuple()[1::])
         else:
             print(Child.ToTuple())
             Cur.execute("""INSERT INTO Categories """ +
                         " (" + "id,"+FieldList + ") " +
-                        """VALUES (?,?,?,?,?,?,?,?,?)""", Child.ToTuple())
+                        """VALUES (?,?,?,?,?,?,?,?,?,?)""", Child.ToTuple())
         ID = Cur.lastrowid
         Cur.close()
         Child._CatID = ID
+
+    #def _DeleteFromSQL(self, Child:Category):
+    #    self.con.execute("DELETE FROM Categories WHERE id = ?", (Child._CatID,))
 
     def GetRootNode(self):
         Root = self.select_children(0)
@@ -137,17 +151,42 @@ class Categories(ClosureTable):
             print("LOADED", Root)
             return Categories.Category.FromTuple(Root[0])
 
-    def NewCategory(self, Parent:Category, Child:Category):
+    def AddCategory(self, Parent:Category, Child:Category):
         #Con.execute("INSERT INTO CatClosures
         self._InsertIntoSQL(Child)
         print(Child._CatID)
         self.insert_child(Parent._CatID, Child._CatID)
         self.con.commit()
 
+    # TODO: Refactor these asserts with something more useful
+    # These Get* Functions need Parent to be gotten from other Get* Functions
+    # Or the objects been passed to AddCategory which mutates the object with an ID
+    def GetChildren(self, Parent:Category):
+        assert Parent._CatID != None
+        Root = self.select_children(Parent._CatID)
+        for i in Root:
+            yield Categories.Category.FromTuple(i)
+
+    def GetSubtree(self, Parent:Category):
+        assert Parent._CatID != None
+        Root = self.select_descendants(Parent._CatID)
+        for i in Root:
+            yield (Categories.Category.FromTuple(i), self.descendants_depth(i[0])-1)
+
+    def DeleteSubtree(self, Parent:Category):
+        assert Parent._CatID != None
+        # TODO: Refactor this to use SQL native commands
+        for k in [Parent, *[i[0] for i in self.GetSubtree(Parent)]]:
+            print("TO BE DLETED", k, k._CatID)
+            self.con.execute("DELETE FROM Categories WHERE id = ?", (k._CatID,))
+        self.delete_descendants(Parent._CatID)
+        self.con.commit()
+
 #############
 ### EVENT ###
 #############
 
+# Wrapper for Event to interact with database
 class Events():
 
     def __init__(self, con):
@@ -205,17 +244,20 @@ class Events():
 
 with Database("TestDB.db") as Conn:
     CatObj = Categories(Conn)
-    GameObj = Categories.Category("Games", 
+    GameObj = Categories.Category("Movies2", 
                                   EMatchingMode.REGEX, 
                                   EMatchingTarget.CLASS_TITLE,
-                                  "Factorio")
-
-    LewdGameObj = Categories.Category("Lewd Games", 
+                                  "mpv")
+    TestGameObj = Categories.Category("Web Video2", 
                                       EMatchingMode.REGEX, 
                                       EMatchingTarget.CLASS_TITLE,
-                                      "Degrees Of Lewdity")
-    LewdGameObj._Color = (255,0,0)
+                                      "youtube")
+    TestGameObj._Color = (255,0,0)
+    Root = CatObj.GetRootNode()
+    CatObj.AddCategory(Root, GameObj)
+    CatObj.AddCategory(GameObj, TestGameObj)
 
-    CatObj.NewCategory(CatObj.GetRootNode(), GameObj)
-    CatObj.NewCategory(GameObj, LewdGameObj)
-    #print(Categories.GetRootNode())
+
+    CatObj.DeleteSubtree(TestGameObj)
+    for i in CatObj.GetSubtree(Root):
+        print(i)
