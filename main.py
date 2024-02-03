@@ -144,6 +144,64 @@ class SettingsPanel(wx.Panel):
     #    "PidPath":"Pid Path",
     #}
 
+    #def _AddCheckbox(self, Label, Key, **kwargs):
+    #    RunAsDaemonCheck = wx.CheckBox(self.ScrolledPanel, label=Label)
+    #    RunAsDaemonCheck.SetValue(Settings()[Label])
+    #    def _RunAsDaemonCheck(e):
+    #        logging.info("Set %s to %s", Label, RunAsDaemonCheck.Value)
+    #        Settings()[Label] = RunAsDaemonCheck.Value
+    #        Settings().Save()
+    #        if kwargs.get("callback", None) != None:
+    #            kwargs.get("callback", ())(RunAsDaemonCheck.Value)
+    #    if kwargs.get("help", None) != None:
+    #        RunAsDaemonCheck.SetToolTip(kwargs.get("help"))
+    #    RunAsDaemonCheck.Bind(wx.EVT_CHECKBOX, _RunAsDaemonCheck)
+    #    self.GenSizer.Add(RunAsDaemonCheck)
+
+    #def _AddSpinCtrl(self, Label, Key, **kwargs):
+    #    RunAsDaemonCheck = wx.CheckBox(self.ScrolledPanel, label=Label)
+    #    if kwargs.get("disabled", False):
+    #        RunAsDaemonCheck.Disable()
+    #    RunAsDaemonCheck.SetValue(Settings()[Label])
+    #    def _RunAsDaemonCheck(e):
+    #        logging.info("Set %s to %s", Label, RunAsDaemonCheck.Value)
+    #        Settings()[Label] = RunAsDaemonCheck.Value
+    #        Settings().Save()
+    #    if kwargs.get("help", None) != None:
+    #        RunAsDaemonCheck.SetToolTip(kwargs.get("help"))
+    #    RunAsDaemonCheck.Bind(wx.EVT_CHECKBOX, _RunAsDaemonCheck)
+    #    self.GenSizer.Add(RunAsDaemonCheck)
+
+    def _BindCtrl(self, Control, Key, Evt):
+        logging.info("Binding %s to CTRL", Key)
+        Control.SetValue(Settings()[Key])
+        def _Callback(e):
+            Settings()[Key] = Control.Value
+            Settings().Save()
+            logging.info("Set %s to %s", Key, Settings()[Key])
+        Control.Bind(Evt, _Callback)
+
+    def _AddSpinCtrl(self, Label,  **kwargs):
+        SpinSizer = wx.BoxSizer()
+        Text = wx.StaticText(self.ScrolledPanel, label=Label)
+        Ctrl = wx.SpinCtrl(self.ScrolledPanel, min=kwargs.get("min", 0), max=kwargs.get("max", 999))
+        SpinSizer.AddSpacer(8)
+        SpinSizer.Add(Text, 2, wx.CENTER)
+        SpinSizer.Add(Ctrl, 1, wx.ALL|wx.EXPAND)
+        self.GenSizer.Add(SpinSizer)
+        return (SpinSizer, Ctrl)
+        #self._BindCtrl(Ctrl, Key, wx.EVT_CHECKBOX)
+
+    def _AddCheckbox(self, Label ):
+        SpinSizer = wx.BoxSizer()
+        Ctrl = wx.CheckBox(self.ScrolledPanel, label=Label)
+        SpinSizer.AddSpacer(4)
+        #SpinSizer.Add(Text, 2, wx.CENTER)
+        SpinSizer.Add(Ctrl, 1, wx.ALL|wx.EXPAND)
+        self.GenSizer.Add(SpinSizer)
+        return (SpinSizer, Ctrl)
+        #self._BindCtrl(Ctrl, Key, wx.EVT_SPINCTRL)
+        
     def __init__(self, parent):
         wx.Panel.__init__(self, parent)
 
@@ -153,29 +211,33 @@ class SettingsPanel(wx.Panel):
 
         # General Settings
         self.GenSizer = wx.StaticBoxSizer(wx.VERTICAL, self, label="General Settings")
-        RunAsDaemonCheck = wx.CheckBox(self.ScrolledPanel, label="Run watcher as daemon?")
-        RunAsDaemonCheck.SetValue(Settings()["RunAsDaemon"])
-        def _RunAsDaemonCheck(e):
-            logging.info("Set RunAsDaemon to %s", RunAsDaemonCheck.Value)
-            Settings()["RunAsDaemon"] = RunAsDaemonCheck.Value
-            print(Settings()["RunAsDaemon"])
-        RunAsDaemonCheck.Bind(wx.EVT_CHECKBOX, _RunAsDaemonCheck)
-        self.GenSizer.Add(RunAsDaemonCheck)
+        self.GenSizer.AddSpacer(4)
 
         # Bottom Bar
-        DiskIcon = wx.ArtProvider().GetBitmapBundle(wx.ART_FILE_SAVE, client=wx.ART_BUTTON)
-        ApplyButton = wx.Button(self, label="Save to disk")
-        ApplyButton.SetBitmap(DiskIcon)
-        def _ApplyButtonSave(e):
-            Setting = Settings()
-            Setting.Save()
-            #Setting.store = Setting.Read()
-        ApplyButton.Bind(wx.EVT_BUTTON, _ApplyButtonSave)
+        #DiskIcon = wx.ArtProvider().GetBitmapBundle(wx.ART_FILE_SAVE, client=wx.ART_BUTTON)
+        #ApplyButton = wx.Button(self, label="Save to disk")
+        #ApplyButton.SetBitmap(DiskIcon)
+        #def _ApplyButtonSave(e):
+        #    Setting = Settings()
+        #    Setting.Save()
+        #    #Setting.store = Setting.Read()
+        #ApplyButton.Bind(wx.EVT_BUTTON, _ApplyButtonSave)
 
         SizerBottom = wx.BoxSizer(wx.HORIZONTAL)
-        SizerBottom.Add(ApplyButton)
-        SizerBottom.Add(wx.StaticText(self, label=SETTINGS_FILE), 0, wx.LEFT | wx.ALIGN_CENTER_VERTICAL, border=8)
+        #SizerBottom.Add(ApplyButton)
+        #SizerBottom.Add(wx.StaticText(self, label=SETTINGS_FILE), 0, wx.LEFT | wx.ALIGN_CENTER_VERTICAL, border=8)
         ScrolledPanelSizer.Add(self.GenSizer, 1, wx.ALL | wx.EXPAND, border=4)
+
+        _, Ctrl = self._AddCheckbox("Run as daemon")
+        Ctrl.SetToolTip("If checked window monitoring may happen after the application is closed")
+        self._BindCtrl(Ctrl, "RunAsDaemon", wx.EVT_CHECKBOX)
+        _, Ctrl = self._AddSpinCtrl("AFK Time Interval", min=-1)
+        Ctrl.SetToolTip("(Seconds)")
+        self._BindCtrl(Ctrl, "AFKTime", wx.EVT_SPINCTRL)
+        #RADCheckBox =wx.CheckBox(self.ScrolledPanel, label="Run as daemon") 
+        #self.GenSizer.Add(RADCheckBox)
+        #self._BindCtrl(RADCheckBox, "RunAsDaemon", wx.EVT_CHECKBOX)
+        #self._BindCtrl(wx.SpinCtrl(self.ScrolledPanel, label="AFK wait interval"), "AFKTime", wx.EVT_SPINCTRL)
 
         self.ScrolledPanel.SetSizer(ScrolledPanelSizer)
         ScrolledPanelSizer.Fit(self.ScrolledPanel)
@@ -233,16 +295,6 @@ class MainWindow(wx.Frame):
 
     def OnNotebookUpdated(self, event):
         pass
-        #Num = event.GetSelection()
-        #if Num == 3:
-        #    self.DaemonPanelObj._StartMonitoringProcess()
-        #else:
-        #    self.DaemonPanelObj._StopMonitoringProcess()
-
-    # Write sysout to DaemonPanel log
-    #def OnUpdateOutputWindow(self, event):
-    #    value = event.text
-    #    self.output_window.AppendText(value)
 
 def Main():
     app = wx.App()

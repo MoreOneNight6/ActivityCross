@@ -242,22 +242,22 @@ class Events():
         con.commit()
 
 
-with Database("TestDB.db") as Conn:
-    CatObj = Categories(Conn)
-    GameObj = Categories.Category("Movies2", 
-                                  EMatchingMode.REGEX, 
-                                  EMatchingTarget.CLASS_TITLE,
-                                  "mpv")
-    TestGameObj = Categories.Category("Web Video2", 
-                                      EMatchingMode.REGEX, 
-                                      EMatchingTarget.CLASS_TITLE,
-                                      "youtube")
-    TestGameObj._Color = (255,0,0)
-    Root = CatObj.GetRootNode()
-    CatObj.AddCategory(Root, GameObj)
-    CatObj.AddCategory(GameObj, TestGameObj)
-
-
-    CatObj.DeleteSubtree(TestGameObj)
-    for i in CatObj.GetSubtree(Root):
-        print(i)
+#with Database("TestDB.db") as Conn:
+#    CatObj = Categories(Conn)
+#    GameObj = Categories.Category("Movies2", 
+#                                  EMatchingMode.REGEX, 
+#                                  EMatchingTarget.CLASS_TITLE,
+#                                  "mpv")
+#    TestGameObj = Categories.Category("Web Video2", 
+#                                      EMatchingMode.REGEX, 
+#                                      EMatchingTarget.CLASS_TITLE,
+#                                      "youtube")
+#    TestGameObj._Color = (255,0,0)
+#    Root = CatObj.GetRootNode()
+#    CatObj.AddCategory(Root, GameObj)
+#    CatObj.AddCategory(GameObj, TestGameObj)
+#
+#
+#    CatObj.DeleteSubtree(TestGameObj)
+#    for i in CatObj.GetSubtree(Root):
+#        print(i)
